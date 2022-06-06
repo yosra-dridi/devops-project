@@ -1,0 +1,47 @@
+---
+- name: Jenkins Server
+  hosts: jenkins
+  become: true
+
+  vars:
+    docker_users:
+      - jenkins
+    java_packages:
+      - openjdk-8-jdk
+    # jenkins_plugins:
+  
+  pre_tasks:
+    - name: apt update
+      apt:
+        update_cache: true
+
+    - name: Install python3-pip
+      apt:
+        name: python3-pip
+        state: latest
+
+  tasks:
+    - name: Install docker-py python package
+      pip:
+        name: docker-py
+
+    - name: Install git
+      apt:
+        name: git
+        state: latest
+    
+    - name: Install ansible
+      apt:
+        name: ansible
+        state: latest
+  
+  roles:
+    - role: geerlingguy.docker
+    - role: geerlingguy.java
+    - role: geerlingguy.jenkins
+  
+  post_tasks:
+    - name: "Install role - docker"
+      shell:
+        cmd: "ansible-galaxy install geerlingguy.docker" # become user jenkins
+      become_user: jenkins

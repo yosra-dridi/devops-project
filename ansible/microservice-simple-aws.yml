@@ -1,0 +1,86 @@
+---
+- name: "Deploy python simple microservice to aws ec2 server"
+  hosts: amazon_ec2
+  become: true # elivate privileges
+  vars:
+    app_path: /var/customapps
+  tasks:
+    - name: "install python3"
+      yum:
+        name: python3
+        state: present
+
+    - name: "verify if pip3 is already present"
+      shell: "pip3 --version"
+      register: pip3status
+
+    - name: "install pip3"
+      shell: "python3 -m ensurepip"
+      when: pip3status.rc == 0
+
+    - name: "setup code location directory"
+      file:
+        path: "{{ app_path }}"
+        state: directory
+
+    - name: "install git"
+      yum:
+        name: git
+        state: installed
+
+    - name: "clone git repo"
+      git:
+        repo: "https://github.com/vinayteki95/devops-tutorial.git"
+        dest: "{{ app_path }}/devops-tutorial"
+        version: main
+
+    - name: "install packages in virtualenv"
+      pip:
+        chdir: "{{ app_path }}/devops-tutorial/applications/microservice/"
+        virtualenv: "virtualenv"
+        virtualenv_command: "/usr/bin/python3 -m venv"
+        requirements: requirements.txt
+
+    - name: "run pytest"
+      shell:
+        cmd: "virtualenv/bin/pytest -v"
+        chdir: "{{ app_path }}/devops-tutorial/applications/microservice/"
+        executable: /bin/bash
+      tags:
+        - run
+
+    - name: "Kill if server is already running"
+      shell:
+        cmd: ps -aux | grep "virtualenv/bin/python3 server.py" | awk -F" " 'NR==1{print $2}' | xargs -I {} kill -9 {}
+        chdir: "{{ app_path }}/devops-tutorial/applications/microservice/"
+        executable: /bin/bash
+      ignore_errors: true
+      tags:
+        - run
+
+    - name: "run flask server in the background"
+      shell:
+        cmd: "nohup virtualenv/bin/python3 server.py > /home/ec2-user/nohup.out 2>&1 &"
+        chdir: "{{ app_path }}/devops-tutorial/applications/microservice/"
+        executable: /bin/bash
+      register: runstatus
+      tags:
+        - run
+
+    - name: "fail if server didnt start successfully"
+      fail:
+        msg: "Server did not start successfully"
+      when: runstatus.rc != 0
+      tags:
+        - run
+
+    # later
+    # - name: install docker
+    # - name: forget about virtualenv and pull docker image
+    # - name: run docker container of the application
+
+    # optional
+    # - name: run tests and deploy only after passing tests
+
+    # ansible-playbook -i /home/fr33b1rd/Projects/inventory_temp microservice-simple-aws.yml -v --tags run
+    # ansible-playbook -i ../secrets/inventory_temp microservice-simple-aws.yml -v --tags run
